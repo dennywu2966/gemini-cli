@@ -14,6 +14,7 @@ import {
   Content,
   Part,
   GenerateContentConfig,
+  FinishReason,
 } from '@google/genai';
 import { ContentGenerator } from '../core/contentGenerator.js';
 import { UserTierId } from '../code_assist/types.js';
@@ -127,7 +128,13 @@ export class QwenContentGenerator implements ContentGenerator {
     }
   }
 
-  async *generateContentStream(
+  async generateContentStream(
+    request: GenerateContentParameters,
+  ): Promise<AsyncGenerator<GenerateContentResponse>> {
+    return this.generateContentStreamInternal(request);
+  }
+
+  private async *generateContentStreamInternal(
     request: GenerateContentParameters,
   ): AsyncGenerator<GenerateContentResponse> {
     const abortController = new AbortController();
@@ -221,7 +228,9 @@ export class QwenContentGenerator implements ContentGenerator {
 
   async countTokens(request: CountTokensParameters): Promise<CountTokensResponse> {
     // Qwen doesn't have token counting API, so we estimate
-    const text = this.extractTextFromContents(request.contents || []);
+    const text = this.extractTextFromContents(
+      Array.isArray(request.contents) ? request.contents : []
+    );
     const estimatedTokens = Math.ceil(text.length / 4); // Rough estimation: 4 chars per token
     
     return {
@@ -239,15 +248,15 @@ export class QwenContentGenerator implements ContentGenerator {
   }
 
   private convertToQwenRequest(request: GenerateContentParameters): any {
-    const messages = this.convertContentsToMessages(request.contents || []);
+    const contents = Array.isArray(request.contents) ? request.contents : [];
+    const messages = this.convertContentsToMessages(contents);
     
     // Add system instruction if present
     if (request.config?.systemInstruction) {
-      const systemContent = this.extractTextFromParts(
-        Array.isArray(request.config.systemInstruction) 
-          ? request.config.systemInstruction 
-          : [request.config.systemInstruction]
-      );
+      const systemParts = Array.isArray(request.config.systemInstruction) 
+        ? request.config.systemInstruction 
+        : [request.config.systemInstruction];
+      const systemContent = this.extractTextFromParts(systemParts);
       if (systemContent) {
         messages.unshift({
           role: 'system',
@@ -301,7 +310,7 @@ export class QwenContentGenerator implements ContentGenerator {
   private convertContentsToMessages(contents: Content[]): any[] {
     return contents.map(content => ({
       role: content.role === 'model' ? 'assistant' : content.role,
-      content: this.extractTextFromParts(content.parts),
+      content: this.extractTextFromParts(content.parts || []),
     })).filter(msg => msg.content.trim());
   }
 
@@ -323,7 +332,7 @@ export class QwenContentGenerator implements ContentGenerator {
 
   private extractTextFromContents(contents: Content[]): string {
     return contents
-      .map(content => this.extractTextFromParts(content.parts))
+      .map(content => this.extractTextFromParts(content.parts || []))
       .join('\n');
   }
 
@@ -420,16 +429,16 @@ export class QwenContentGenerator implements ContentGenerator {
     return functions;
   }
 
-  private mapFinishReason(qwenReason: string): string {
+  private mapFinishReason(qwenReason: string): FinishReason {
     switch (qwenReason) {
       case 'stop':
-        return 'STOP';
+        return FinishReason.STOP;
       case 'length':
-        return 'MAX_TOKENS';
+        return FinishReason.MAX_TOKENS;
       case 'function_call':
-        return 'STOP';
+        return FinishReason.STOP;
       default:
-        return 'OTHER';
+        return FinishReason.OTHER;
     }
   }
 }

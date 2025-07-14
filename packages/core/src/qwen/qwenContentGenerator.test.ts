@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QwenContentGenerator } from './qwenContentGenerator.js';
-import { GenerateContentParameters } from '@google/genai';
+import { GenerateContentParameters, Type } from '@google/genai';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -74,7 +74,7 @@ describe('QwenContentGenerator', () => {
       );
 
       expect(result.candidates).toHaveLength(1);
-      expect(result.candidates![0].content.parts[0].text).toBe(
+      expect(result.candidates?.[0]?.content?.parts?.[0]?.text).toBe(
         'Hello, this is a test response',
       );
       expect(result.usageMetadata?.totalTokenCount).toBe(18);
@@ -121,9 +121,9 @@ describe('QwenContentGenerator', () => {
                   name: 'test_function',
                   description: 'A test function',
                   parameters: {
-                    type: 'object',
+                    type: Type.OBJECT,
                     properties: {
-                      param: { type: 'string' },
+                      param: { type: Type.STRING },
                     },
                   },
                 },
@@ -135,7 +135,7 @@ describe('QwenContentGenerator', () => {
 
       const result = await generator.generateContent(request);
 
-      expect(result.candidates![0].content.parts[0]).toEqual({
+      expect(result.candidates?.[0]?.content?.parts?.[0]).toEqual({
         functionCall: {
           name: 'test_function',
           args: { param: 'value' },
@@ -270,7 +270,7 @@ describe('QwenContentGenerator', () => {
         ],
       };
 
-      const stream = generator.generateContentStream(request);
+      const stream = await generator.generateContentStream(request);
       const chunks = [];
 
       for await (const chunk of stream) {
@@ -278,8 +278,8 @@ describe('QwenContentGenerator', () => {
       }
 
       expect(chunks).toHaveLength(2);
-      expect(chunks[0].candidates![0].content.parts[0].text).toBe('Hello');
-      expect(chunks[1].candidates![0].content.parts[0].text).toBe(' world');
+      expect(chunks[0].candidates?.[0]?.content?.parts?.[0]?.text).toBe('Hello');
+      expect(chunks[1].candidates?.[0]?.content?.parts?.[0]?.text).toBe(' world');
       expect(mockReader.releaseLock).toHaveBeenCalled();
     });
 
@@ -302,7 +302,7 @@ describe('QwenContentGenerator', () => {
 
       await expect(
         async () => {
-          const stream = generator.generateContentStream(request);
+          const stream = await generator.generateContentStream(request);
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           for await (const chunk of stream) {
             // This should throw before we get here
