@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export enum QwenErrorType {
+export enum OpenAIErrorType {
   NETWORK_ERROR = 'NETWORK_ERROR',
   API_ERROR = 'API_ERROR',
   AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
@@ -16,21 +16,21 @@ export enum QwenErrorType {
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 
-export class QwenError extends Error {
-  public readonly type: QwenErrorType;
+export class OpenAIError extends Error {
+  public readonly type: OpenAIErrorType;
   public readonly statusCode?: number;
   public readonly retryable: boolean;
   public readonly originalError?: unknown;
 
   constructor(
-    type: QwenErrorType,
+    type: OpenAIErrorType,
     message: string,
     statusCode?: number,
     retryable: boolean = false,
     originalError?: unknown,
   ) {
     super(message);
-    this.name = 'QwenError';
+    this.name = 'OpenAIError';
     this.type = type;
     this.statusCode = statusCode;
     this.retryable = retryable;
@@ -38,7 +38,7 @@ export class QwenError extends Error {
 
     // Maintain proper stack trace
     if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, QwenError);
+      Error.captureStackTrace(this, OpenAIError);
     }
   }
 
@@ -46,50 +46,50 @@ export class QwenError extends Error {
     status: number,
     statusText: string,
     responseBody?: string,
-  ): QwenError {
-    let type: QwenErrorType;
+  ): OpenAIError {
+    let type: OpenAIErrorType;
     let retryable = false;
 
     switch (status) {
       case 401:
-        type = QwenErrorType.AUTHENTICATION_ERROR;
+        type = OpenAIErrorType.AUTHENTICATION_ERROR;
         break;
       case 403:
-        type = QwenErrorType.QUOTA_EXCEEDED;
+        type = OpenAIErrorType.QUOTA_EXCEEDED;
         break;
       case 404:
-        type = QwenErrorType.MODEL_NOT_FOUND;
+        type = OpenAIErrorType.MODEL_NOT_FOUND;
         break;
       case 429:
-        type = QwenErrorType.RATE_LIMIT_ERROR;
+        type = OpenAIErrorType.RATE_LIMIT_ERROR;
         retryable = true;
         break;
       case 400:
-        type = QwenErrorType.INVALID_REQUEST;
+        type = OpenAIErrorType.INVALID_REQUEST;
         break;
       case 500:
       case 502:
       case 503:
       case 504:
-        type = QwenErrorType.API_ERROR;
+        type = OpenAIErrorType.API_ERROR;
         retryable = true;
         break;
       default:
-        type = QwenErrorType.UNKNOWN_ERROR;
+        type = OpenAIErrorType.UNKNOWN_ERROR;
         retryable = status >= 500;
     }
 
     const message = responseBody
-      ? `Qwen API error (${status}): ${statusText} - ${responseBody}`
-      : `Qwen API error (${status}): ${statusText}`;
+      ? `OpenAI API error (${status}): ${statusText} - ${responseBody}`
+      : `OpenAI API error (${status}): ${statusText}`;
 
-    return new QwenError(type, message, status, retryable);
+    return new OpenAIError(type, message, status, retryable);
   }
 
-  static fromNetworkError(error: unknown): QwenError {
+  static fromNetworkError(error: unknown): OpenAIError {
     const message = error instanceof Error ? error.message : 'Network error';
-    return new QwenError(
-      QwenErrorType.NETWORK_ERROR,
+    return new OpenAIError(
+      OpenAIErrorType.NETWORK_ERROR,
       `Network error: ${message}`,
       undefined,
       true,
@@ -97,9 +97,9 @@ export class QwenError extends Error {
     );
   }
 
-  static fromTimeoutError(): QwenError {
-    return new QwenError(
-      QwenErrorType.TIMEOUT_ERROR,
+  static fromTimeoutError(): OpenAIError {
+    return new OpenAIError(
+      OpenAIErrorType.TIMEOUT_ERROR,
       'Request timeout',
       undefined,
       true,
@@ -112,7 +112,7 @@ export interface RetryConfig {
   baseDelay: number;
   maxDelay: number;
   backoffMultiplier: number;
-  retryableErrorTypes: QwenErrorType[];
+  retryableErrorTypes: OpenAIErrorType[];
 }
 
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
@@ -121,10 +121,10 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxDelay: 30000, // 30 seconds
   backoffMultiplier: 2,
   retryableErrorTypes: [
-    QwenErrorType.NETWORK_ERROR,
-    QwenErrorType.RATE_LIMIT_ERROR,
-    QwenErrorType.API_ERROR,
-    QwenErrorType.TIMEOUT_ERROR,
+    OpenAIErrorType.NETWORK_ERROR,
+    OpenAIErrorType.RATE_LIMIT_ERROR,
+    OpenAIErrorType.API_ERROR,
+    OpenAIErrorType.TIMEOUT_ERROR,
   ],
 };
 
@@ -135,7 +135,7 @@ export class RetryHandler {
     operation: () => Promise<T>,
     abortSignal?: AbortSignal,
   ): Promise<T> {
-    let lastError: QwenError | unknown;
+    let lastError: OpenAIError | unknown;
     let attempt = 0;
 
     while (attempt <= this.config.maxRetries) {
@@ -155,15 +155,15 @@ export class RetryHandler {
         }
 
         // Only retry for specific error types
-        if (error instanceof QwenError) {
+        if (error instanceof OpenAIError) {
           if (!this.shouldRetry(error)) {
             throw error;
           }
         } else {
-          // For non-QwenError, convert to network error and retry
-          const qwenError = QwenError.fromNetworkError(error);
-          if (!this.shouldRetry(qwenError)) {
-            throw qwenError;
+          // For non-OpenAIError, convert to network error and retry
+          const openaiError = OpenAIError.fromNetworkError(error);
+          if (!this.shouldRetry(openaiError)) {
+            throw openaiError;
           }
         }
 
@@ -171,7 +171,7 @@ export class RetryHandler {
         const delay = this.calculateDelay(attempt);
         
         console.warn(
-          `Qwen API request failed (attempt ${attempt}/${this.config.maxRetries}), retrying in ${delay}ms...`,
+          `OpenAI API request failed (attempt ${attempt}/${this.config.maxRetries}), retrying in ${delay}ms...`,
           error instanceof Error ? error.message : error,
         );
 
@@ -183,7 +183,7 @@ export class RetryHandler {
     throw lastError;
   }
 
-  private shouldRetry(error: QwenError): boolean {
+  private shouldRetry(error: OpenAIError): boolean {
     return (
       error.retryable &&
       this.config.retryableErrorTypes.includes(error.type)

@@ -19,11 +19,11 @@ export * from './core/geminiRequest.js';
 export * from './core/coreToolScheduler.js';
 export * from './core/nonInteractiveToolExecutor.js';
 
-// Export Qwen integration
-export * from './qwen/qwenContentGenerator.js';
-export * from './qwen/qwenConfig.js';
-export * from './qwen/qwenErrors.js';
-export * from './qwen/qwenValidator.js';
+// Export OpenAI integration
+export * from './openai/openaiContentGenerator.js';
+export * from './openai/openaiConfig.js';
+export * from './openai/openaiErrors.js';
+export * from './openai/openaiValidator.js';
 
 export * from './code_assist/codeAssist.js';
 export * from './code_assist/oauth2.js';

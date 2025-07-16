@@ -1,11 +1,11 @@
-# Qwen 集成使用示例和最佳实践
+# OpenAI 集成使用示例和最佳实践
 
 ## 基础使用示例
 
 ### 简单问答
 ```bash
-$ export QWEN_API_KEY="your_api_key"
-$ gemini --auth-type=qwen-api-key --model=qwen-plus
+$ export OPENAI_API_KEY="your_api_key"
+$ gemini --auth-type=openai-api-key --model=openai-plus
 
 > 你好，请介绍一下 TypeScript 的主要特性
 
@@ -64,7 +64,7 @@ const user: User = {
 
 > 帮我重构这个函数，使其更加类型安全
 
-[用户提供代码后，Qwen 会分析并提供重构建议]
+[用户提供代码后，OpenAI 会分析并提供重构建议]
 ```
 
 ### 文档处理
@@ -78,13 +78,13 @@ const user: User = {
 
 ## 高级配置示例
 
-### 自定义 Qwen 参数配置
+### 自定义 OpenAI 参数配置
 ```typescript
 // ~/.gemini/config.json
 {
-  "authType": "qwen-api-key",
-  "model": "qwen-plus",
-  "qwenConfig": {
+  "authType": "openai-api-key",
+  "model": "openai-plus",
+  "openaiConfig": {
     // 控制重复内容
     "repetition_penalty": 1.1,
     "frequency_penalty": 0.1,
@@ -117,23 +117,23 @@ const user: User = {
 ### 程序化使用
 ```typescript
 import { 
-  QwenContentGenerator, 
-  QwenConfigValidator,
+  OpenAIContentGenerator, 
+  OpenAIConfigValidator,
   validateConfigOrThrow 
 } from '@google/gemini-cli-core';
 
 // 创建配置并验证
-const qwenConfig = {
+const openaiConfig = {
   repetition_penalty: 1.1,
   enable_search: true,
   max_tokens: 2000
 };
 
-validateConfigOrThrow(qwenConfig);
+validateConfigOrThrow(openaiConfig);
 
 // 创建生成器
-const generator = new QwenContentGenerator(
-  process.env.QWEN_API_KEY!,
+const generator = new OpenAIContentGenerator(
+  process.env.OPENAI_API_KEY!,
   'https://dashscope.aliyuncs.com/compatible-mode/v1',
   {
     headers: {
@@ -151,7 +151,7 @@ const generator = new QwenContentGenerator(
 
 // 生成内容
 const response = await generator.generateContent({
-  model: 'qwen-plus',
+  model: 'openai-plus',
   contents: [{
     role: 'user',
     parts: [{ text: '解释量子计算的基本原理' }]
@@ -159,7 +159,7 @@ const response = await generator.generateContent({
   config: {
     temperature: 0.3,
     maxOutputTokens: 1000,
-    qwen: qwenConfig
+    openai: openaiConfig
   }
 });
 
@@ -170,14 +170,14 @@ console.log(response.candidates?.[0]?.content.parts[0]?.text);
 ```typescript
 async function streamChat() {
   const stream = generator.generateContentStream({
-    model: 'qwen-plus',
+    model: 'openai-plus',
     contents: [{
       role: 'user',
       parts: [{ text: '详细解释 React Hooks 的工作原理' }]
     }],
     config: {
       temperature: 0.5,
-      qwen: {
+      openai: {
         max_tokens_per_chunk: 256,
         incremental_output: true
       }
@@ -197,33 +197,33 @@ async function streamChat() {
 
 ### 自定义错误处理
 ```typescript
-import { QwenError, QwenErrorType } from '@google/gemini-cli-core';
+import { OpenAIError, OpenAIErrorType } from '@google/gemini-cli-core';
 
 async function robustGeneration(prompt: string) {
   try {
     const response = await generator.generateContent({
-      model: 'qwen-plus',
+      model: 'openai-plus',
       contents: [{ role: 'user', parts: [{ text: prompt }] }]
     });
     
     return response;
   } catch (error) {
-    if (error instanceof QwenError) {
+    if (error instanceof OpenAIError) {
       switch (error.type) {
-        case QwenErrorType.RATE_LIMIT_ERROR:
+        case OpenAIErrorType.RATE_LIMIT_ERROR:
           console.log('请求频率过高，等待后重试...');
           await new Promise(resolve => setTimeout(resolve, 60000));
           return robustGeneration(prompt);
           
-        case QwenErrorType.QUOTA_EXCEEDED:
+        case OpenAIErrorType.QUOTA_EXCEEDED:
           console.error('配额已用完，请检查账户余额');
           throw new Error('配额不足');
           
-        case QwenErrorType.AUTHENTICATION_ERROR:
+        case OpenAIErrorType.AUTHENTICATION_ERROR:
           console.error('认证失败，请检查 API Key');
           throw new Error('认证失败');
           
-        case QwenErrorType.NETWORK_ERROR:
+        case OpenAIErrorType.NETWORK_ERROR:
           if (error.retryable) {
             console.log('网络错误，自动重试中...');
             // 重试逻辑已内置，这里只是示例
@@ -284,22 +284,22 @@ async function batchProcess(prompts: string[]) {
 ```typescript
 function selectOptimalModel(taskType: string, textLength: number): string {
   if (taskType === 'simple_qa' || textLength < 500) {
-    return 'qwen-turbo';  // 快速响应
+    return 'openai-turbo';  // 快速响应
   } else if (taskType === 'code_analysis' || textLength < 5000) {
-    return 'qwen-plus';   // 平衡性能
+    return 'openai-plus';   // 平衡性能
   } else if (taskType === 'complex_reasoning') {
-    return 'qwen-max';    // 最高质量
+    return 'openai-max';    // 最高质量
   } else if (textLength > 10000) {
-    return 'qwen-max-longcontext';  // 长文本
+    return 'openai-max-longcontext';  // 长文本
   }
   
-  return 'qwen-plus';  // 默认选择
+  return 'openai-plus';  // 默认选择
 }
 ```
 
 ### 2. 请求缓存
 ```typescript
-class QwenCache {
+class OpenAICache {
   private cache = new Map<string, any>();
   private ttl = 5 * 60 * 1000; // 5分钟
   
@@ -316,7 +316,7 @@ class QwenCache {
     }
     
     const result = await generator.generateContent({
-      model: 'qwen-plus',
+      model: 'openai-plus',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config
     });
@@ -333,7 +333,7 @@ class QwenCache {
 
 ### 3. 并发控制
 ```typescript
-class QwenRateLimiter {
+class OpenAIRateLimiter {
   private queue: Array<() => Promise<any>> = [];
   private running = 0;
   private maxConcurrent = 3;
@@ -368,13 +368,13 @@ class QwenRateLimiter {
 }
 
 // 使用示例
-const limiter = new QwenRateLimiter();
+const limiter = new OpenAIRateLimiter();
 
 const results = await Promise.all(
   prompts.map(prompt => 
     limiter.execute(() => 
       generator.generateContent({
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [{ role: 'user', parts: [{ text: prompt }] }]
       })
     )
@@ -409,9 +409,9 @@ jobs:
         
       - name: AI Code Review
         env:
-          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          gemini --auth-type=qwen-api-key --model=qwen-plus --non-interactive \
+          gemini --auth-type=openai-api-key --model=openai-plus --non-interactive \
             "分析此次PR的代码变更，提供代码质量、安全性和最佳实践的建议" \
             --context="$(git diff origin/main...HEAD)"
 ```
@@ -423,12 +423,12 @@ FROM node:20-alpine
 
 RUN npm install -g @google/gemini-cli
 
-ENV QWEN_API_KEY=""
-ENV QWEN_API_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+ENV OPENAI_API_KEY=""
+ENV OPENAI_API_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 WORKDIR /workspace
 
-ENTRYPOINT ["gemini", "--auth-type=qwen-api-key"]
+ENTRYPOINT ["gemini", "--auth-type=openai-api-key"]
 ```
 
 ### VS Code 扩展
@@ -438,12 +438,12 @@ ENTRYPOINT ["gemini", "--auth-type=qwen-api-key"]
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Qwen: Explain Code",
+      "label": "OpenAI: Explain Code",
       "type": "shell",
       "command": "gemini",
       "args": [
-        "--auth-type=qwen-api-key",
-        "--model=qwen-plus",
+        "--auth-type=openai-api-key",
+        "--model=openai-plus",
         "--non-interactive",
         "解释这段代码的功能和实现原理",
         "--context=${selectedText}"
@@ -454,4 +454,4 @@ ENTRYPOINT ["gemini", "--auth-type=qwen-api-key"]
 }
 ```
 
-这些示例展示了如何在各种场景下有效使用 Qwen 集成，从基础的命令行使用到高级的程序化集成和性能优化。
+这些示例展示了如何在各种场景下有效使用 OpenAI 集成，从基础的命令行使用到高级的程序化集成和性能优化。

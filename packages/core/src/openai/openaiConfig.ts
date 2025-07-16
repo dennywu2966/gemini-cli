@@ -7,9 +7,9 @@
 import { GenerateContentConfig } from '@google/genai';
 
 /**
- * Qwen-specific configuration options
+ * OpenAI-specific configuration options
  */
-export interface QwenSpecificConfig {
+export interface OpenAISpecificConfig {
   /** Whether to enable incremental output (streaming) */
   incremental_output?: boolean;
   
@@ -38,7 +38,7 @@ export interface QwenSpecificConfig {
   enable_citation?: boolean;
   
   /** Custom tools/plugins to enable */
-  tools?: QwenTool[];
+  tools?: OpenAITool[];
   
   /** Output format specification */
   result_format?: 'text' | 'message' | 'json_object';
@@ -50,7 +50,7 @@ export interface QwenSpecificConfig {
   };
 }
 
-export interface QwenTool {
+export interface OpenAITool {
   type: 'function' | 'code_interpreter' | 'web_search';
   function?: {
     name: string;
@@ -60,16 +60,16 @@ export interface QwenTool {
 }
 
 /**
- * Extended Gemini config that includes Qwen-specific options
+ * Extended Gemini config that includes OpenAI-specific options
  */
 export interface ExtendedGenerateContentConfig extends GenerateContentConfig {
-  qwen?: QwenSpecificConfig;
+  openai?: OpenAISpecificConfig;
 }
 
 /**
- * Default Qwen configuration values
+ * Default OpenAI configuration values
  */
-export const DEFAULT_QWEN_CONFIG: Required<Pick<QwenSpecificConfig, 
+export const DEFAULT_OPENAI_CONFIG: Required<Pick<OpenAISpecificConfig, 
   'repetition_penalty' | 'presence_penalty' | 'frequency_penalty' | 
   'max_tokens_per_chunk' | 'enable_search' | 'enable_citation' | 'result_format'
 >> = {
@@ -85,47 +85,47 @@ export const DEFAULT_QWEN_CONFIG: Required<Pick<QwenSpecificConfig,
 /**
  * Model-specific default configurations
  */
-export const MODEL_CONFIGS: Record<string, Partial<QwenSpecificConfig>> = {
-  'qwen-turbo': {
+export const MODEL_CONFIGS: Record<string, Partial<OpenAISpecificConfig>> = {
+  'openai-turbo': {
     repetition_penalty: 1.05,
     max_tokens_per_chunk: 256,
   },
-  'qwen-plus': {
+  'openai-plus': {
     repetition_penalty: 1.1,
     max_tokens_per_chunk: 512,
   },
-  'qwen-max': {
+  'openai-max': {
     repetition_penalty: 1.1,
     max_tokens_per_chunk: 1024,
     enable_search: true,
   },
-  'qwen-max-longcontext': {
+  'openai-max-longcontext': {
     repetition_penalty: 1.05,
     max_tokens_per_chunk: 2048,
   },
-  'qwen2-72b-instruct': {
+  'openai2-72b-instruct': {
     repetition_penalty: 1.1,
     max_tokens_per_chunk: 512,
   },
-  'qwen2-7b-instruct': {
+  'openai2-7b-instruct': {
     repetition_penalty: 1.05,
     max_tokens_per_chunk: 256,
   },
-  'qwen2-1.5b-instruct': {
+  'openai2-1.5b-instruct': {
     repetition_penalty: 1.0,
     max_tokens_per_chunk: 128,
   },
-  'qwen2-0.5b-instruct': {
+  'openai2-0.5b-instruct': {
     repetition_penalty: 1.0,
     max_tokens_per_chunk: 64,
   },
 };
 
 /**
- * Validates and normalizes Qwen configuration
+ * Validates and normalizes OpenAI configuration
  */
-export function validateQwenConfig(config: QwenSpecificConfig): QwenSpecificConfig {
-  const validated: QwenSpecificConfig = { ...config };
+export function validateOpenAIConfig(config: OpenAISpecificConfig): OpenAISpecificConfig {
+  const validated: OpenAISpecificConfig = { ...config };
 
   // Validate repetition_penalty
   if (validated.repetition_penalty !== undefined) {
@@ -188,24 +188,24 @@ export function validateQwenConfig(config: QwenSpecificConfig): QwenSpecificConf
 /**
  * Merges model-specific config with user config
  */
-export function getMergedQwenConfig(
+export function getMergedOpenAIConfig(
   model: string,
-  userConfig?: QwenSpecificConfig,
-): QwenSpecificConfig {
+  userConfig?: OpenAISpecificConfig,
+): OpenAISpecificConfig {
   const modelDefaults = MODEL_CONFIGS[model] || {};
   const merged = {
-    ...DEFAULT_QWEN_CONFIG,
+    ...DEFAULT_OPENAI_CONFIG,
     ...modelDefaults,
     ...userConfig,
   };
   
-  return validateQwenConfig(merged);
+  return validateOpenAIConfig(merged);
 }
 
 /**
- * Converts Qwen config to API request parameters
+ * Converts OpenAI config to API request parameters
  */
-export function qwenConfigToApiParams(config: QwenSpecificConfig): Record<string, any> {
+export function openaiConfigToApiParams(config: OpenAISpecificConfig): Record<string, any> {
   const params: Record<string, any> = {};
 
   if (config.repetition_penalty !== undefined) {

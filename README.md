@@ -65,6 +65,34 @@ The Vertex AI API provides a [free tier](https://cloud.google.com/vertex-ai/gene
 
 3. (Optionally) Add a billing account on your project to get access to [higher usage limits](https://cloud.google.com/vertex-ai/generative-ai/docs/quotas)
 
+### Use Alibaba Cloud OpenAI Models
+
+You can configure the Gemini CLI to use Alibaba Cloud's OpenAI models through the Dashscope service, which provides an OpenAI-compatible API.
+
+1. **Get an API Key:**
+   - Go to the [Alibaba Cloud Dashscope Console](https://dashscope.console.aliyun.com/).
+   - Navigate to **API-KEY Management** and create a new API key.
+
+2. **Set Environment Variables:**
+   - Set the following environment variables in your terminal. Replace `"your_dashscope_api_key"` with the key you just created.
+
+   ```bash
+   # Your API key from Dashscope
+   export OPENAI_API_KEY="your_dashscope_api_key"
+
+   # (Optional) The API endpoint. Defaults to the public endpoint.
+   export OPENAI_API_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+   ```
+
+3. **Run the CLI:**
+   - Start the CLI, specifying `openai-api-key` as the authentication type and choosing a OpenAI model.
+
+   ```bash
+   gemini --auth-type=openai-api-key --model=openai-plus "你好，千问！"
+   ```
+
+   Supported models include `openai-turbo`, `openai-plus`, `openai-max`, and the newer `openai2-` series.
+
 For other authentication methods, including Google Workspace accounts, see the [authentication](./docs/cli/authentication.md) guide.
 
 ## Examples
@@ -100,6 +128,22 @@ gemini
 
 Head over to the [troubleshooting](docs/troubleshooting.md) guide if you're
 having issues.
+
+## Debugging
+
+To enable detailed logging for debugging purposes, you can use the `DEBUG` environment variable. For example, to see logs related to the OpenAI integration:
+
+```bash
+export DEBUG=openai:*
+gemini --auth-type=openai-api-key "Your prompt here"
+```
+
+You can also enable verbose logging for all modules:
+
+```bash
+export DEBUG=*
+gemini "Your prompt here"
+```
 
 ## Popular tasks
 

@@ -12,6 +12,7 @@ import {
   EmbedContentResponse,
   EmbedContentParameters,
   Content,
+  PartUnion,
   Part,
   GenerateContentConfig,
   FinishReason,
@@ -19,33 +20,33 @@ import {
 import { ContentGenerator } from '../core/contentGenerator.js';
 import { UserTierId } from '../code_assist/types.js';
 import { 
-  QwenError, 
-  QwenErrorType, 
+  OpenAIError, 
+  OpenAIErrorType, 
   RetryHandler, 
   RetryConfig, 
   DEFAULT_RETRY_CONFIG 
-} from './qwenErrors.js';
+} from './openaiErrors.js';
 import {
   ExtendedGenerateContentConfig,
-  QwenSpecificConfig,
-  getMergedQwenConfig,
-  qwenConfigToApiParams,
-} from './qwenConfig.js';
+  OpenAISpecificConfig,
+  getMergedOpenAIConfig,
+  openaiConfigToApiParams,
+} from './openaiConfig.js';
 import {
-  QwenConfigValidator,
+  OpenAIConfigValidator,
   validateEnvironmentOrThrow,
   validateConfigOrThrow,
-} from './qwenValidator.js';
+} from './openaiValidator.js';
 
-export interface QwenContentGeneratorConfig {
+export interface OpenAIContentGeneratorConfig {
   timeout?: number;
   retryConfig?: Partial<RetryConfig>;
 }
 
 /**
- * Content generator that adapts Qwen API to Gemini interface
+ * Content generator that adapts OpenAI API to Gemini interface
  */
-export class QwenContentGenerator implements ContentGenerator {
+export class OpenAIContentGenerator implements ContentGenerator {
   private retryHandler: RetryHandler;
   private timeout: number;
 
@@ -53,7 +54,7 @@ export class QwenContentGenerator implements ContentGenerator {
     private apiKey: string,
     private apiUrl: string,
     private httpOptions: any = {},
-    config: QwenContentGeneratorConfig = {},
+    config: OpenAIContentGeneratorConfig = {},
   ) {
     // Validate environment configuration
     validateEnvironmentOrThrow({
@@ -77,7 +78,7 @@ export class QwenContentGenerator implements ContentGenerator {
 
     try {
       return await this.retryHandler.executeWithRetry(async () => {
-        const qwenRequest = this.convertToQwenRequest(request);
+        const openaiRequest = this.convertToOpenAIRequest(request);
         
         let response: Response;
         try {
@@ -88,14 +89,14 @@ export class QwenContentGenerator implements ContentGenerator {
               'Authorization': `Bearer ${this.apiKey}`,
               ...this.httpOptions.headers,
             },
-            body: JSON.stringify(qwenRequest),
+            body: JSON.stringify(openaiRequest),
             signal: abortController.signal,
           });
         } catch (error) {
           if (abortController.signal.aborted) {
-            throw QwenError.fromTimeoutError();
+            throw OpenAIError.fromTimeoutError();
           }
-          throw QwenError.fromNetworkError(error);
+          throw OpenAIError.fromNetworkError(error);
         }
 
         if (!response.ok) {
@@ -105,23 +106,23 @@ export class QwenContentGenerator implements ContentGenerator {
           } catch {
             responseBody = '';
           }
-          throw QwenError.fromHttpStatus(response.status, response.statusText, responseBody);
+          throw OpenAIError.fromHttpStatus(response.status, response.statusText, responseBody);
         }
 
-        let qwenResponse: any;
+        let openaiResponse: any;
         try {
-          qwenResponse = await response.json();
+          openaiResponse = await response.json();
         } catch (error) {
-          throw new QwenError(
-            QwenErrorType.API_ERROR,
-            'Failed to parse JSON response from Qwen API',
+          throw new OpenAIError(
+            OpenAIErrorType.API_ERROR,
+            'Failed to parse JSON response from OpenAI API',
             response.status,
             false,
             error,
           );
         }
 
-        return this.convertToGeminiResponse(qwenResponse);
+        return this.convertToGeminiResponse(openaiResponse);
       }, abortController.signal);
     } finally {
       clearTimeout(timeoutId);
@@ -141,8 +142,8 @@ export class QwenContentGenerator implements ContentGenerator {
     const timeoutId = setTimeout(() => abortController.abort(), this.timeout);
 
     try {
-      const qwenRequest = {
-        ...this.convertToQwenRequest(request),
+      const openaiRequest = {
+        ...this.convertToOpenAIRequest(request),
         stream: true,
       };
 
@@ -155,14 +156,14 @@ export class QwenContentGenerator implements ContentGenerator {
             'Authorization': `Bearer ${this.apiKey}`,
             ...this.httpOptions.headers,
           },
-          body: JSON.stringify(qwenRequest),
+          body: JSON.stringify(openaiRequest),
           signal: abortController.signal,
         });
       } catch (error) {
         if (abortController.signal.aborted) {
-          throw QwenError.fromTimeoutError();
+          throw OpenAIError.fromTimeoutError();
         }
-        throw QwenError.fromNetworkError(error);
+        throw OpenAIError.fromNetworkError(error);
       }
 
       if (!response.ok) {
@@ -172,13 +173,13 @@ export class QwenContentGenerator implements ContentGenerator {
         } catch {
           responseBody = '';
         }
-        throw QwenError.fromHttpStatus(response.status, response.statusText, responseBody);
+        throw OpenAIError.fromHttpStatus(response.status, response.statusText, responseBody);
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        throw new QwenError(
-          QwenErrorType.API_ERROR,
+        throw new OpenAIError(
+          OpenAIErrorType.API_ERROR,
           'Failed to get response stream reader',
         );
       }
@@ -189,7 +190,7 @@ export class QwenContentGenerator implements ContentGenerator {
       try {
         while (true) {
           if (abortController.signal.aborted) {
-            throw QwenError.fromTimeoutError();
+            throw OpenAIError.fromTimeoutError();
           }
 
           const { done, value } = await reader.read();
@@ -226,10 +227,65 @@ export class QwenContentGenerator implements ContentGenerator {
     }
   }
 
+//  private ensureContentArray(input: Content[] | PartUnion[]): Content[] {
+//    if (input.length === 0) return [];
+//  
+//    // 检查第一个元素的类型
+//    if (typeof input[0] === 'string') {
+//      return input.map(part => ({
+//        // 根据你的实际 Content 结构调整
+//        type: 'text',
+//        text: part as string
+//      }));
+//    }
+//  
+//    return input as Content[];
+//  }
+
+  private ensureContentArray(input: Content[] | PartUnion[]): Content[] {
+    // 1. 处理空数组
+    if (input.length === 0) return [];
+  
+    // 2. 如果已经是 Content[] 类型，直接返回
+    if (this.isContentArray(input)) {
+      return input;
+    }
+  
+    // 3. 处理 PartUnion[] 类型
+    const parts: Part[] = [];
+  
+    for (const item of input) {
+      if (typeof item === 'string') {
+        // 字符串类型转换为 text Part
+        parts.push({ text: item });
+      } else {
+        // Part 对象直接使用
+        parts.push(item);
+      }
+    }
+  
+    // 4. 创建 Content 对象（使用默认角色）
+    return [{
+      role: 'user', // 默认角色，可根据需要调整
+      parts
+    }];
+  }
+  
+  // 类型守卫函数：检查是否是 Content[]
+  private isContentArray(arr: any): arr is Content[] {
+    return Array.isArray(arr) &&
+           arr.length > 0 &&
+           typeof arr[0] === 'object' &&
+           'role' in arr[0] &&
+           'parts' in arr[0];
+  }
+
   async countTokens(request: CountTokensParameters): Promise<CountTokensResponse> {
-    // Qwen doesn't have token counting API, so we estimate
+    const contents = Array.isArray(request.contents) ? request.contents : [];
+    const finalContents = this.ensureContentArray(contents);
+    // OpenAI doesn't have token counting API, so we estimate
     const text = this.extractTextFromContents(
-      Array.isArray(request.contents) ? request.contents : []
+      finalContents
     );
     const estimatedTokens = Math.ceil(text.length / 4); // Rough estimation: 4 chars per token
     
@@ -239,24 +295,24 @@ export class QwenContentGenerator implements ContentGenerator {
   }
 
   async embedContent(request: EmbedContentParameters): Promise<EmbedContentResponse> {
-    // Qwen embedding API is different, would need specific implementation
-    throw new Error('Embedding not supported for Qwen models');
+    // OpenAI embedding API is different, would need specific implementation
+    throw new Error('Embedding not supported for OpenAI models');
   }
 
   async getTier(): Promise<UserTierId | undefined> {
     return undefined;
   }
 
-  private convertToQwenRequest(request: GenerateContentParameters): any {
+  private convertToOpenAIRequest(request: GenerateContentParameters): any {
     const contents = Array.isArray(request.contents) ? request.contents : [];
-    const messages = this.convertContentsToMessages(contents);
+    const messages = this.convertContentsToMessages(this.ensureContentArray(contents));
     
     // Add system instruction if present
     if (request.config?.systemInstruction) {
       const systemParts = Array.isArray(request.config.systemInstruction) 
         ? request.config.systemInstruction 
         : [request.config.systemInstruction];
-      const systemContent = this.extractTextFromParts(systemParts);
+      const systemContent = this.extractTextFromParts(this.convertToParts(systemParts));
       if (systemContent) {
         messages.unshift({
           role: 'system',
@@ -266,19 +322,19 @@ export class QwenContentGenerator implements ContentGenerator {
     }
 
     // Validate model
-    const modelValidation = QwenConfigValidator.validateModel(request.model);
+    const modelValidation = OpenAIConfigValidator.validateModel(request.model);
     if (modelValidation.warnings.length > 0) {
       console.warn('Model validation warnings:', modelValidation.warnings.join(', '));
     }
 
-    // Get merged Qwen configuration
+    // Get merged OpenAI configuration
     const extendedConfig = request.config as ExtendedGenerateContentConfig;
-    const qwenConfig = getMergedQwenConfig(request.model, extendedConfig?.qwen);
+    const openaiConfig = getMergedOpenAIConfig(request.model, extendedConfig?.openai);
     
     // Validate the merged configuration
-    validateConfigOrThrow(qwenConfig);
+    validateConfigOrThrow(openaiConfig);
 
-    const qwenRequest: any = {
+    const openaiRequest: any = {
       model: request.model,
       messages,
       temperature: request.config?.temperature || 0,
@@ -286,25 +342,25 @@ export class QwenContentGenerator implements ContentGenerator {
       max_tokens: request.config?.maxOutputTokens || 4000,
     };
 
-    // Add Qwen-specific parameters
-    const qwenParams = qwenConfigToApiParams(qwenConfig);
-    Object.assign(qwenRequest, qwenParams);
+    // Add OpenAI-specific parameters
+    const openaiParams = openaiConfigToApiParams(openaiConfig);
+    Object.assign(openaiRequest, openaiParams);
 
     // Handle function calling if tools are present
     if (request.config?.tools && request.config.tools.length > 0) {
       const functions = this.convertToolsToFunctions(request.config.tools);
       if (functions.length > 0) {
-        qwenRequest.functions = functions;
-        qwenRequest.function_call = 'auto';
+        openaiRequest.functions = functions;
+        openaiRequest.function_call = 'auto';
       }
     }
 
-    // Handle Qwen-specific tools if no Gemini tools
-    if (!qwenRequest.functions && qwenConfig.tools && qwenConfig.tools.length > 0) {
-      qwenRequest.tools = qwenConfig.tools;
+    // Handle OpenAI-specific tools if no Gemini tools
+    if (!openaiRequest.functions && openaiConfig.tools && openaiConfig.tools.length > 0) {
+      openaiRequest.tools = openaiConfig.tools;
     }
 
-    return qwenRequest;
+    return openaiRequest;
   }
 
   private convertContentsToMessages(contents: Content[]): any[] {
@@ -336,10 +392,85 @@ export class QwenContentGenerator implements ContentGenerator {
       .join('\n');
   }
 
-  private convertToGeminiResponse(qwenResponse: any): GenerateContentResponse {
-    const choice = qwenResponse.choices?.[0];
+  private convertToParts(input: (Content | PartUnion)[]): Part[] {
+    // 1. 处理空输入
+    if (input.length === 0) return [];
+  
+    // 2. 创建结果数组
+    const result: Part[] = [];
+  
+    // 3. 遍历所有输入项
+    for (const item of input) {
+      if (this.isContent(item)) {
+        // 处理 Content 类型
+        if (item.parts && Array.isArray(item.parts)) {
+          // 过滤掉 undefined 并确保所有元素都是有效的 Part
+          const validParts = item.parts.filter(
+            part => part !== null && part !== undefined
+          ) as Part[];
+  
+          result.push(...validParts);
+        }
+      } else {
+        // 处理 PartUnion 类型
+        if (typeof item === 'string') {
+          // 字符串转换为 text Part
+          result.push({ text: item });
+        } else if (item !== null && item !== undefined) {
+          // 有效的 Part 对象直接添加
+          result.push(item);
+        }
+      }
+    }
+  
+    return result;
+  }
+  
+  // 类型守卫：检查是否是 Content 对象
+  private isContent(item: any): item is Content {
+    return (
+      typeof item === 'object' &&
+      item !== null &&
+      'role' in item &&
+      'parts' in item
+    );
+  }
+
+//  private convertToParts(input: Content[] | PartUnion[]): Part[] {
+//    // 1. 处理空输入
+//    if (input.length === 0) return [];
+//  
+//    // 2. 检查输入类型
+//    const isContentArray = input.every(item =>
+//      typeof item === 'object' &&
+//      'role' in item &&
+//      'parts' in item
+//    );
+//  
+//    // 3. 处理 Content[] 类型
+//    if (isContentArray) {
+//      const contents = input as Content[];
+//      // 提取所有 parts 并展平
+//      return contents.flatMap(content => content.parts);
+//    }
+//  
+//    // 4. 处理 PartUnion[] 类型
+//    const parts = input as PartUnion[];
+//    return parts.map(item => {
+//      if (typeof item === 'string') {
+//        // 将字符串转换为 text Part
+//        return { text: item };
+//      } else {
+//        // 直接返回 Part 对象
+//        return item;
+//      }
+//    });
+//  }
+//
+  private convertToGeminiResponse(openaiResponse: any): GenerateContentResponse {
+    const choice = openaiResponse.choices?.[0];
     if (!choice) {
-      throw new Error('No choices in Qwen response');
+      throw new Error('No choices in OpenAI response');
     }
 
     const parts: Part[] = [];
@@ -358,6 +489,11 @@ export class QwenContentGenerator implements ContentGenerator {
     }
 
     return {
+      text: "", // 根据实际响应设置
+      functionCalls: undefined,
+      executableCode: undefined,
+      codeExecutionResult: undefined,
+      data: undefined,
       candidates: [
         {
           content: {
@@ -368,9 +504,9 @@ export class QwenContentGenerator implements ContentGenerator {
         },
       ],
       usageMetadata: {
-        promptTokenCount: qwenResponse.usage?.prompt_tokens,
-        candidatesTokenCount: qwenResponse.usage?.completion_tokens,
-        totalTokenCount: qwenResponse.usage?.total_tokens,
+        promptTokenCount: openaiResponse.usage?.prompt_tokens,
+        candidatesTokenCount: openaiResponse.usage?.completion_tokens,
+        totalTokenCount: openaiResponse.usage?.total_tokens,
       },
     };
   }
@@ -397,6 +533,11 @@ export class QwenContentGenerator implements ContentGenerator {
     if (parts.length === 0) return null;
 
     return {
+      text: "", // 根据实际响应设置
+      functionCalls: undefined,
+      executableCode: undefined,
+      codeExecutionResult: undefined,
+      data: undefined,
       candidates: [
         {
           content: {
@@ -429,8 +570,8 @@ export class QwenContentGenerator implements ContentGenerator {
     return functions;
   }
 
-  private mapFinishReason(qwenReason: string): FinishReason {
-    switch (qwenReason) {
+  private mapFinishReason(openaiReason: string): FinishReason {
+    switch (openaiReason) {
       case 'stop':
         return FinishReason.STOP;
       case 'length':

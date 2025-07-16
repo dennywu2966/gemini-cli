@@ -18,7 +18,7 @@ import { DEFAULT_GEMINI_MODEL } from '../config/models.js';
 import { Config } from '../config/config.js';
 import { getEffectiveModel } from './modelCheck.js';
 import { UserTierId } from '../code_assist/types.js';
-import { QwenContentGenerator } from '../qwen/qwenContentGenerator.js';
+import { OpenAIContentGenerator } from '../openai/openaiContentGenerator.js';
 
 /**
  * Interface abstracting the core functionalities for generating content and counting tokens.
@@ -44,7 +44,7 @@ export enum AuthType {
   USE_GEMINI = 'gemini-api-key',
   USE_VERTEX_AI = 'vertex-ai',
   CLOUD_SHELL = 'cloud-shell',
-  USE_QWEN = 'qwen-api-key',
+  USE_OPENAI = 'openai-api-key',
 }
 
 export type ContentGeneratorConfig = {
@@ -52,7 +52,7 @@ export type ContentGeneratorConfig = {
   apiKey?: string;
   vertexai?: boolean;
   authType?: AuthType | undefined;
-  qwenApiUrl?: string;
+  openaiApiUrl?: string;
 };
 
 export async function createContentGeneratorConfig(
@@ -63,8 +63,8 @@ export async function createContentGeneratorConfig(
   const googleApiKey = process.env.GOOGLE_API_KEY || undefined;
   const googleCloudProject = process.env.GOOGLE_CLOUD_PROJECT || undefined;
   const googleCloudLocation = process.env.GOOGLE_CLOUD_LOCATION || undefined;
-  const qwenApiKey = process.env.QWEN_API_KEY || undefined;
-  const qwenApiUrl = process.env.QWEN_API_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const openaiApiKey = process.env.OPENAI_API_KEY || undefined;
+  const openaiApiUrl = process.env.OPENAI_API_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 
   // Use runtime model from config if available, otherwise fallback to parameter or default
   const effectiveModel = model || DEFAULT_GEMINI_MODEL;
@@ -103,10 +103,10 @@ export async function createContentGeneratorConfig(
     return contentGeneratorConfig;
   }
 
-  if (authType === AuthType.USE_QWEN && qwenApiKey) {
-    contentGeneratorConfig.apiKey = qwenApiKey;
-    contentGeneratorConfig.qwenApiUrl = qwenApiUrl;
-    contentGeneratorConfig.model = model || 'qwen-plus'; // Default Qwen model
+  if (authType === AuthType.USE_OPENAI && openaiApiKey) {
+    contentGeneratorConfig.apiKey = openaiApiKey;
+    contentGeneratorConfig.openaiApiUrl = openaiApiUrl;
+    contentGeneratorConfig.model = model || 'openai-plus'; // Default OpenAI model
 
     return contentGeneratorConfig;
   }
@@ -150,17 +150,17 @@ export async function createContentGenerator(
     return googleGenAI.models;
   }
 
-  if (config.authType === AuthType.USE_QWEN) {
+  if (config.authType === AuthType.USE_OPENAI) {
     if (!config.apiKey) {
-      throw new Error('Qwen API key is required for USE_QWEN auth type');
+      throw new Error('OpenAI API key is required for USE_OPENAI auth type');
     }
-    if (!config.qwenApiUrl) {
-      throw new Error('Qwen API URL is required for USE_QWEN auth type');
+    if (!config.openaiApiUrl) {
+      throw new Error('OpenAI API URL is required for USE_OPENAI auth type');
     }
     
-    return new QwenContentGenerator(
+    return new OpenAIContentGenerator(
       config.apiKey,
-      config.qwenApiUrl,
+      config.openaiApiUrl,
       httpOptions,
     );
   }

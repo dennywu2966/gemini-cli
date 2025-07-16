@@ -1,8 +1,8 @@
-# 阿里云百炼 Qwen 模型集成指南
+# 阿里云百炼 OpenAI 模型集成指南
 
 ## 概述
 
-本指南介绍如何将 Gemini CLI 配置为使用阿里云百炼的 Qwen 模型，通过 OpenAI 兼容接口进行调用。该集成保持了 Gemini CLI 的所有核心功能，同时支持 Qwen 模型的特有能力。
+本指南介绍如何将 Gemini CLI 配置为使用阿里云百炼的 OpenAI 模型，通过 OpenAI 兼容接口进行调用。该集成保持了 Gemini CLI 的所有核心功能，同时支持 OpenAI 模型的特有能力。
 
 ## 前置条件
 
@@ -17,29 +17,29 @@
 
 ```bash
 # 必需：阿里云百炼 API Key
-export QWEN_API_KEY="your_dashscope_api_key"
+export OPENAI_API_KEY="your_dashscope_api_key"
 
 # 可选：自定义 API 端点 (默认: https://dashscope.aliyuncs.com/compatible-mode/v1)
-export QWEN_API_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+export OPENAI_API_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # 可选：设置默认模型
-export QWEN_DEFAULT_MODEL="qwen-plus"
+export OPENAI_DEFAULT_MODEL="openai-plus"
 ```
 
 ### 2. 启动 CLI
 
 ```bash
 # 方式一：命令行参数
-gemini --auth-type=qwen-api-key --model=qwen-plus
+gemini --auth-type=openai-api-key --model=openai-plus
 
 # 方式二：环境变量
-export GEMINI_AUTH_TYPE=qwen-api-key
-export GEMINI_MODEL=qwen-plus
+export GEMINI_AUTH_TYPE=openai-api-key
+export GEMINI_MODEL=openai-plus
 gemini
 
 # 方式三：交互式选择
 gemini
-# 然后在认证选项中选择 "Qwen API Key"
+# 然后在认证选项中选择 "OpenAI API Key"
 ```
 
 ### 3. 配置文件设置
@@ -48,9 +48,9 @@ gemini
 
 ```json
 {
-  "authType": "qwen-api-key",
-  "model": "qwen-plus",
-  "qwenConfig": {
+  "authType": "openai-api-key",
+  "model": "openai-plus",
+  "openaiConfig": {
     "repetition_penalty": 1.1,
     "enable_search": true,
     "max_tokens_per_chunk": 512
@@ -62,24 +62,24 @@ gemini
 
 | 模型名称 | 描述 | 上下文长度 | 适用场景 |
 |---------|------|-----------|----------|
-| `qwen-turbo` | 快速响应模型 | 32K | 简单问答、快速迭代 |
-| `qwen-plus` | 平衡性能模型（**推荐**） | 128K | 日常开发、代码分析 |
-| `qwen-max` | 最强性能模型 | 32K | 复杂推理、高质量生成 |
-| `qwen-max-longcontext` | 长文本处理模型 | 1M | 大型文档分析 |
-| `qwen2-72b-instruct` | Qwen2 大型模型 | 32K | 专业级任务 |
-| `qwen2-7b-instruct` | Qwen2 中型模型 | 32K | 平衡的性能和速度 |
-| `qwen2-1.5b-instruct` | Qwen2 小型模型 | 32K | 轻量级应用 |
-| `qwen2-0.5b-instruct` | Qwen2 超小型模型 | 32K | 资源受限环境 |
+| `openai-turbo` | 快速响应模型 | 32K | 简单问答、快速迭代 |
+| `openai-plus` | 平衡性能模型（**推荐**） | 128K | 日常开发、代码分析 |
+| `openai-max` | 最强性能模型 | 32K | 复杂推理、高质量生成 |
+| `openai-max-longcontext` | 长文本处理模型 | 1M | 大型文档分析 |
+| `openai2-72b-instruct` | OpenAI2 大型模型 | 32K | 专业级任务 |
+| `openai2-7b-instruct` | OpenAI2 中型模型 | 32K | 平衡的性能和速度 |
+| `openai2-1.5b-instruct` | OpenAI2 小型模型 | 32K | 轻量级应用 |
+| `openai2-0.5b-instruct` | OpenAI2 超小型模型 | 32K | 资源受限环境 |
 
 ## 高级配置
 
-### Qwen 特有参数
+### OpenAI 特有参数
 
 ```json
 {
-  "authType": "qwen-api-key",
-  "model": "qwen-plus",
-  "qwenConfig": {
+  "authType": "openai-api-key",
+  "model": "openai-plus",
+  "openaiConfig": {
     "repetition_penalty": 1.1,          // 重复惩罚 (0.01-2.0)
     "presence_penalty": 0.0,            // 存在惩罚 (-2.0-2.0)
     "frequency_penalty": 0.0,           // 频率惩罚 (-2.0-2.0)
@@ -109,7 +109,7 @@ gemini
 
 ```json
 {
-  "qwenConfig": {
+  "openaiConfig": {
     "timeout": 60000,                  // 请求超时 (毫秒)
     "retryConfig": {
       "maxRetries": 3,                 // 最大重试次数
@@ -147,7 +147,7 @@ def quicksort(arr):
 
 ## 功能限制
 
-1. **嵌入功能不支持**：Qwen 模型不支持文本嵌入功能
+1. **嵌入功能不支持**：OpenAI 模型不支持文本嵌入功能
 2. **Token 计数估算**：使用基于字符数的估算方法（4字符 ≈ 1 token）
 3. **函数调用**：支持但可能与 Gemini 原生工具系统存在差异
 
@@ -157,18 +157,18 @@ def quicksort(arr):
 
 #### 1. API Key 相关错误
 
-**错误**: `QWEN_API_KEY environment variable not found`
+**错误**: `OPENAI_API_KEY environment variable not found`
 ```bash
-Error: QWEN_API_KEY environment variable not found
+Error: OPENAI_API_KEY environment variable not found
 ```
 **解决方案**：
-- 设置环境变量：`export QWEN_API_KEY="your_api_key"`
-- 或在 `.env` 文件中添加：`QWEN_API_KEY=your_api_key`
+- 设置环境变量：`export OPENAI_API_KEY="your_api_key"`
+- 或在 `.env` 文件中添加：`OPENAI_API_KEY=your_api_key`
 - 检查 API Key 格式是否正确（通常以 `sk-` 开头）
 
 **错误**: `Authentication failed`
 ```bash
-Error: Qwen API error (401): Unauthorized
+Error: OpenAI API error (401): Unauthorized
 ```
 **解决方案**：
 - 验证 API Key 是否正确复制（无额外空格）
@@ -199,7 +199,7 @@ Error: Network error: Connection refused
 
 **错误**: `Rate limit exceeded`
 ```bash
-Error: Qwen API error (429): Too Many Requests
+Error: OpenAI API error (429): Too Many Requests
 ```
 **解决方案**：
 - 等待一分钟后重试
@@ -208,7 +208,7 @@ Error: Qwen API error (429): Too Many Requests
 
 **错误**: `Quota exceeded`
 ```bash
-Error: Qwen API error (403): Quota exceeded
+Error: OpenAI API error (403): Quota exceeded
 ```
 **解决方案**：
 - 检查账户余额是否充足
@@ -219,16 +219,16 @@ Error: Qwen API error (403): Quota exceeded
 
 **错误**: `Model not found`
 ```bash
-Error: Qwen API error (404): Model not found
+Error: OpenAI API error (404): Model not found
 ```
 **解决方案**：
-- 使用支持的模型名称（如 `qwen-plus`）
+- 使用支持的模型名称（如 `openai-plus`）
 - 检查模型名称拼写
 - 确认该模型在当前地区可用
 
 **错误**: `Invalid parameters`
 ```bash
-Error: Qwen API error (400): Invalid request parameters
+Error: OpenAI API error (400): Invalid request parameters
 ```
 **解决方案**：
 - 检查参数范围（如 temperature: 0-2）
@@ -251,21 +251,21 @@ Error: Failed to parse streaming response
 #### 启用详细日志
 ```bash
 # 设置调试环境变量
-export DEBUG=qwen:*
-export QWEN_VERBOSE=true
+export DEBUG=openai:*
+export OPENAI_VERBOSE=true
 
 # 运行 CLI
-gemini --auth-type=qwen-api-key --model=qwen-plus
+gemini --auth-type=openai-api-key --model=openai-plus
 ```
 
 #### 测试连接
 ```bash
 # 测试 API 连接
 curl -X POST "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions" \
-  -H "Authorization: Bearer $QWEN_API_KEY" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "qwen-plus",
+    "model": "openai-plus",
     "messages": [{"role": "user", "content": "Hello"}],
     "max_tokens": 10
   }'
@@ -274,12 +274,12 @@ curl -X POST "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
 #### 检查配置
 ```javascript
 // 在 Node.js 中验证配置
-const { QwenContentGenerator } = require('@google/gemini-cli-core');
+const { OpenAIContentGenerator } = require('@google/gemini-cli-core');
 
 try {
-  const generator = new QwenContentGenerator(
-    process.env.QWEN_API_KEY,
-    process.env.QWEN_API_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+  const generator = new OpenAIContentGenerator(
+    process.env.OPENAI_API_KEY,
+    process.env.OPENAI_API_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
   );
   console.log('Configuration valid');
 } catch (error) {
@@ -291,7 +291,7 @@ try {
 
 #### 1. 减少延迟
 - 选择地理位置更近的 API 端点
-- 使用 `qwen-turbo` 模型进行快速响应
+- 使用 `openai-turbo` 模型进行快速响应
 - 启用连接复用
 
 #### 2. 提高成功率
@@ -323,10 +323,10 @@ try {
 
 ## 开发扩展
 
-如需添加更多 Qwen 模型或自定义功能，请修改：
+如需添加更多 OpenAI 模型或自定义功能，请修改：
 
 1. `packages/core/src/config/models.ts` - 添加新模型
-2. `packages/core/src/qwen/qwenContentGenerator.ts` - 扩展转换逻辑
+2. `packages/core/src/openai/openaiContentGenerator.ts` - 扩展转换逻辑
 3. `packages/cli/src/config/auth.ts` - 更新认证验证
 
 ## 联系支持

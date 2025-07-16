@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { QwenSpecificConfig, QwenTool } from './qwenConfig.js';
-import { QwenError, QwenErrorType } from './qwenErrors.js';
+import { OpenAISpecificConfig, OpenAITool } from './openaiConfig.js';
+import { OpenAIError, OpenAIErrorType } from './openaiErrors.js';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -13,7 +13,7 @@ export interface ValidationResult {
   warnings: string[];
 }
 
-export interface QwenEnvironmentConfig {
+export interface OpenAIEnvironmentConfig {
   apiKey?: string;
   apiUrl?: string;
   defaultModel?: string;
@@ -21,14 +21,14 @@ export interface QwenEnvironmentConfig {
 }
 
 /**
- * Validates Qwen-specific configuration
+ * Validates OpenAI-specific configuration
  */
-export class QwenConfigValidator {
+export class OpenAIConfigValidator {
   
   /**
-   * Validates the complete Qwen configuration
+   * Validates the complete OpenAI configuration
    */
-  static validateConfig(config: QwenSpecificConfig): ValidationResult {
+  static validateConfig(config: OpenAISpecificConfig): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -164,9 +164,9 @@ export class QwenConfigValidator {
   }
 
   /**
-   * Validates Qwen tools configuration
+   * Validates OpenAI tools configuration
    */
-  static validateTools(tools: QwenTool[]): ValidationResult {
+  static validateTools(tools: OpenAITool[]): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -225,7 +225,7 @@ export class QwenConfigValidator {
   /**
    * Validates environment configuration
    */
-  static validateEnvironment(config: QwenEnvironmentConfig): ValidationResult {
+  static validateEnvironment(config: OpenAIEnvironmentConfig): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -286,18 +286,18 @@ export class QwenConfigValidator {
     };
 
     const supportedModels = [
-      'qwen-turbo',
-      'qwen-plus',
-      'qwen-max',
-      'qwen-max-0428',
-      'qwen-max-0403',
-      'qwen-max-0107',
-      'qwen-max-longcontext',
-      'qwen2-72b-instruct',
-      'qwen2-57b-a14b-instruct',
-      'qwen2-7b-instruct',
-      'qwen2-1.5b-instruct',
-      'qwen2-0.5b-instruct',
+      'openai-turbo',
+      'openai-plus',
+      'openai-max',
+      'openai-max-0428',
+      'openai-max-0403',
+      'openai-max-0107',
+      'openai-max-longcontext',
+      'openai2-72b-instruct',
+      'openai2-57b-a14b-instruct',
+      'openai2-7b-instruct',
+      'openai2-1.5b-instruct',
+      'openai2-0.5b-instruct',
     ];
 
     if (typeof model !== 'string' || model.length === 0) {
@@ -314,65 +314,65 @@ export class QwenConfigValidator {
 /**
  * Throws an error if validation fails
  */
-export function validateConfigOrThrow(config: QwenSpecificConfig): void {
-  const validation = QwenConfigValidator.validateConfig(config);
+export function validateConfigOrThrow(config: OpenAISpecificConfig): void {
+  const validation = OpenAIConfigValidator.validateConfig(config);
   
   if (!validation.isValid) {
-    throw new QwenError(
-      QwenErrorType.INVALID_REQUEST,
-      `Invalid Qwen configuration: ${validation.errors.join(', ')}`,
+    throw new OpenAIError(
+      OpenAIErrorType.INVALID_REQUEST,
+      `Invalid OpenAI configuration: ${validation.errors.join(', ')}`,
     );
   }
 
   // Log warnings
   if (validation.warnings.length > 0) {
-    console.warn('Qwen configuration warnings:', validation.warnings.join(', '));
+    console.warn('OpenAI configuration warnings:', validation.warnings.join(', '));
   }
 }
 
 /**
  * Validates environment configuration and throws on errors
  */
-export function validateEnvironmentOrThrow(config: QwenEnvironmentConfig): void {
-  const validation = QwenConfigValidator.validateEnvironment(config);
+export function validateEnvironmentOrThrow(config: OpenAIEnvironmentConfig): void {
+  const validation = OpenAIConfigValidator.validateEnvironment(config);
   
   if (!validation.isValid) {
-    throw new QwenError(
-      QwenErrorType.INVALID_REQUEST,
-      `Invalid Qwen environment configuration: ${validation.errors.join(', ')}`,
+    throw new OpenAIError(
+      OpenAIErrorType.INVALID_REQUEST,
+      `Invalid OpenAI environment configuration: ${validation.errors.join(', ')}`,
     );
   }
 
   // Log warnings
   if (validation.warnings.length > 0) {
-    console.warn('Qwen environment warnings:', validation.warnings.join(', '));
+    console.warn('OpenAI environment warnings:', validation.warnings.join(', '));
   }
 }
 
 /**
- * Type guard to check if an object is a valid QwenSpecificConfig
+ * Type guard to check if an object is a valid OpenAISpecificConfig
  */
-export function isValidQwenConfig(obj: any): obj is QwenSpecificConfig {
+export function isValidOpenAIConfig(obj: any): obj is OpenAISpecificConfig {
   if (typeof obj !== 'object' || obj === null) {
     return false;
   }
 
-  const validation = QwenConfigValidator.validateConfig(obj);
+  const validation = OpenAIConfigValidator.validateConfig(obj);
   return validation.isValid;
 }
 
 /**
  * Safe configuration parser that validates and provides defaults
  */
-export function parseQwenConfig(input: unknown): QwenSpecificConfig {
+export function parseOpenAIConfig(input: unknown): OpenAISpecificConfig {
   if (typeof input !== 'object' || input === null) {
-    throw new QwenError(
-      QwenErrorType.INVALID_REQUEST,
-      'Qwen config must be an object',
+    throw new OpenAIError(
+      OpenAIErrorType.INVALID_REQUEST,
+      'OpenAI config must be an object',
     );
   }
 
-  const config = input as QwenSpecificConfig;
+  const config = input as OpenAISpecificConfig;
   validateConfigOrThrow(config);
   
   return config;

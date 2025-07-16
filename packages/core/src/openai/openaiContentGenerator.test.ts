@@ -5,20 +5,21 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { QwenContentGenerator } from './qwenContentGenerator.js';
+import { OpenAIContentGenerator } from './openaiContentGenerator.js';
 import { GenerateContentParameters, Type } from '@google/genai';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-describe('QwenContentGenerator', () => {
-  let generator: QwenContentGenerator;
+describe('OpenAIContentGenerator', () => {
+  let generator: OpenAIContentGenerator;
   const mockApiKey = 'test-api-key';
   const mockApiUrl = 'https://test.api.url';
 
   beforeEach(() => {
-    generator = new QwenContentGenerator(mockApiKey, mockApiUrl);
+    // Disable retries for most tests to avoid timeouts
+    generator = new OpenAIContentGenerator(mockApiKey, mockApiUrl, {}, { retryConfig: { maxRetries: 0 }});
     vi.clearAllMocks();
   });
 
@@ -28,7 +29,7 @@ describe('QwenContentGenerator', () => {
 
   describe('generateContent', () => {
     it('should successfully generate content with basic request', async () => {
-      const mockQwenResponse = {
+      const mockOpenAIResponse = {
         choices: [
           {
             message: {
@@ -46,11 +47,12 @@ describe('QwenContentGenerator', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockQwenResponse),
+        json: () => Promise.resolve(mockOpenAIResponse),
+        text: () => Promise.resolve(JSON.stringify(mockOpenAIResponse)),
       });
 
       const request: GenerateContentParameters = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [
           {
             role: 'user',
@@ -69,7 +71,7 @@ describe('QwenContentGenerator', () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${mockApiKey}`,
           }),
-          body: expect.stringContaining('"model":"qwen-plus"'),
+          body: expect.stringContaining('"model":"openai-plus"'),
         }),
       );
 
@@ -80,39 +82,31 @@ describe('QwenContentGenerator', () => {
       expect(result.usageMetadata?.totalTokenCount).toBe(18);
     });
 
-    it('should handle function calls correctly', async () => {
-      const mockQwenResponse = {
+    it('should handle function calling', async () => {
+      const mockOpenAIResponse = {
         choices: [
           {
             message: {
+              role: 'assistant',
               function_call: {
                 name: 'test_function',
-                arguments: '{"param": "value"}',
+                arguments: '{"arg1":"value1"}',
               },
             },
             finish_reason: 'function_call',
           },
         ],
-        usage: {
-          prompt_tokens: 15,
-          completion_tokens: 5,
-          total_tokens: 20,
-        },
       };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockQwenResponse),
+        json: () => Promise.resolve(mockOpenAIResponse),
+        text: () => Promise.resolve(JSON.stringify(mockOpenAIResponse)),
       });
 
       const request: GenerateContentParameters = {
-        model: 'qwen-plus',
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: 'Call a function' }],
-          },
-        ],
+        model: 'openai-plus',
+        contents: [{ role: 'user', parts: [{ text: 'Call a function' }] }],
         config: {
           tools: [
             {
@@ -123,7 +117,7 @@ describe('QwenContentGenerator', () => {
                   parameters: {
                     type: Type.OBJECT,
                     properties: {
-                      param: { type: Type.STRING },
+                      arg1: { type: Type.STRING },
                     },
                   },
                 },
@@ -133,18 +127,87 @@ describe('QwenContentGenerator', () => {
         },
       };
 
-      const result = await generator.generateContent(request);
+      const response = await generator.generateContent(request);
 
-      expect(result.candidates?.[0]?.content?.parts?.[0]).toEqual({
-        functionCall: {
-          name: 'test_function',
-          args: { param: 'value' },
+      expect(response.candidates).toBeDefined();
+      expect(response.candidates?.[0]?.content?.parts?.[0]?.functionCall).toEqual({
+        name: 'test_function',
+        args: { arg1: 'value1' },
+      });
+      expect(mockFetch.mock.calls[0][1]?.body).toContain(
+        '"function_call":"auto"',
+      );
+    });
+
+    it('should handle system instructions', async () => {
+      const mockOpenAIResponse = {
+        choices: [
+          { message: { content: 'System response' }, finish_reason: 'stop' },
+        ],
+      };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockOpenAIResponse),
+        text: () => Promise.resolve(JSON.stringify(mockOpenAIResponse)),
+      });
+
+      const request: GenerateContentParameters = {
+        model: 'openai-plus',
+        contents: [{ role: 'user', parts: [{ text: 'User query' }] }],
+        config: {
+          systemInstruction: 'You are a helpful assistant.',
         },
+      };
+
+      await generator.generateContent(request);
+
+      const sentBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(sentBody.messages[0]).toEqual({
+        role: 'system',
+        content: 'You are a helpful assistant.',
+      });
+      expect(sentBody.messages[1]).toEqual({
+        role: 'user',
+        content: 'User query',
       });
     });
 
+    it('should handle 429 Rate Limit error', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve(''),
+      });
+      const request: GenerateContentParameters = {
+        model: 'openai-plus',
+        contents: [{ role: 'user', parts: [{ text: 'test' }] }],
+      };
+      await expect(generator.generateContent(request)).rejects.toThrow(
+        'OpenAI API error (429): Too Many Requests',
+      );
+    });
+
+    it('should handle 503 Service Unavailable error', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve(''),
+      });
+      const request: GenerateContentParameters = {
+        model: 'openai-plus',
+        contents: [{ role: 'user', parts: [{ text: 'test' }] }],
+      };
+      await expect(generator.generateContent(request)).rejects.toThrow(
+        'OpenAI API error (503): Service Unavailable',
+      );
+    });
+
     it('should include system instruction in request', async () => {
-      const mockQwenResponse = {
+      const mockOpenAIResponse = {
         choices: [
           {
             message: { content: 'Response with system instruction' },
@@ -156,11 +219,12 @@ describe('QwenContentGenerator', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockQwenResponse),
+        json: () => Promise.resolve(mockOpenAIResponse),
+        text: () => Promise.resolve(JSON.stringify(mockOpenAIResponse)),
       });
 
       const request: GenerateContentParameters = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [
           {
             role: 'user',
@@ -189,10 +253,12 @@ describe('QwenContentGenerator', () => {
         ok: false,
         status: 401,
         statusText: 'Unauthorized',
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve(''),
       });
 
       const request: GenerateContentParameters = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [
           {
             role: 'user',
@@ -202,23 +268,24 @@ describe('QwenContentGenerator', () => {
       };
 
       await expect(generator.generateContent(request)).rejects.toThrow(
-        'Qwen API error: 401 Unauthorized',
+        'OpenAI API error (401): Unauthorized',
       );
     });
 
     it('should throw error when no choices in response', async () => {
-      const mockQwenResponse = {
+      const mockOpenAIResponse = {
         choices: [],
         usage: { prompt_tokens: 5, completion_tokens: 0, total_tokens: 5 },
       };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockQwenResponse),
+        json: () => Promise.resolve(mockOpenAIResponse),
+        text: () => Promise.resolve(JSON.stringify(mockOpenAIResponse)),
       });
 
       const request: GenerateContentParameters = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [
           {
             role: 'user',
@@ -228,7 +295,7 @@ describe('QwenContentGenerator', () => {
       };
 
       await expect(generator.generateContent(request)).rejects.toThrow(
-        'No choices in Qwen response',
+        'No choices in OpenAI response',
       );
     });
   });
@@ -236,10 +303,9 @@ describe('QwenContentGenerator', () => {
   describe('generateContentStream', () => {
     it('should handle streaming response correctly', async () => {
       const streamData = [
-        'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
-        'data: {"choices":[{"delta":{"content":" world"}}]}\n\n',
-        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
-        'data: [DONE]\n\n',
+        'data: {"choices":[{"delta":{"content":"Hello"}}]}',
+        'data: {"choices":[{"delta":{"content":" world"}}]}',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}','data: [DONE]'
       ];
 
       const mockReader = {
@@ -247,7 +313,7 @@ describe('QwenContentGenerator', () => {
           .fn()
           .mockResolvedValueOnce({
             done: false,
-            value: new TextEncoder().encode(streamData.join('')),
+            value: new TextEncoder().encode(streamData.join('\n\n')),
           })
           .mockResolvedValueOnce({ done: true }),
         releaseLock: vi.fn(),
@@ -261,7 +327,7 @@ describe('QwenContentGenerator', () => {
       });
 
       const request: GenerateContentParameters = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [
           {
             role: 'user',
@@ -288,10 +354,11 @@ describe('QwenContentGenerator', () => {
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
+        text: () => Promise.resolve(''),
       });
 
       const request: GenerateContentParameters = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [
           {
             role: 'user',
@@ -308,14 +375,14 @@ describe('QwenContentGenerator', () => {
             // This should throw before we get here
           }
         },
-      ).rejects.toThrow('Qwen API error: 500 Internal Server Error');
+      ).rejects.toThrow('OpenAI API error (500): Internal Server Error');
     });
   });
 
   describe('countTokens', () => {
     it('should estimate token count correctly', async () => {
       const request = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [
           {
             role: 'user',
@@ -333,7 +400,7 @@ describe('QwenContentGenerator', () => {
 
     it('should return 0 for empty contents', async () => {
       const request = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [],
       };
 
@@ -346,12 +413,12 @@ describe('QwenContentGenerator', () => {
   describe('embedContent', () => {
     it('should throw error for unsupported embedding', async () => {
       const request = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: ['test text'],
       };
 
       await expect(generator.embedContent(request)).rejects.toThrow(
-        'Embedding not supported for Qwen models',
+        'Embedding not supported for OpenAI models',
       );
     });
   });
@@ -365,7 +432,7 @@ describe('QwenContentGenerator', () => {
 
   describe('request conversion', () => {
     it('should convert generation config correctly', async () => {
-      const mockQwenResponse = {
+      const mockOpenAIResponse = {
         choices: [
           {
             message: { content: 'Test response' },
@@ -377,11 +444,12 @@ describe('QwenContentGenerator', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockQwenResponse),
+        json: () => Promise.resolve(mockOpenAIResponse),
+        text: () => Promise.resolve(JSON.stringify(mockOpenAIResponse)),
       });
 
       const request: GenerateContentParameters = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [
           {
             role: 'user',
@@ -406,7 +474,7 @@ describe('QwenContentGenerator', () => {
     });
 
     it('should handle multiple content roles correctly', async () => {
-      const mockQwenResponse = {
+      const mockOpenAIResponse = {
         choices: [
           {
             message: { content: 'Multi-turn response' },
@@ -418,11 +486,12 @@ describe('QwenContentGenerator', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockQwenResponse),
+        json: () => Promise.resolve(mockOpenAIResponse),
+        text: () => Promise.resolve(JSON.stringify(mockOpenAIResponse)),
       });
 
       const request: GenerateContentParameters = {
-        model: 'qwen-plus',
+        model: 'openai-plus',
         contents: [
           {
             role: 'user',
@@ -454,18 +523,18 @@ describe('QwenContentGenerator', () => {
   describe('finish reason mapping', () => {
     it('should map finish reasons correctly', async () => {
       const testCases = [
-        { qwenReason: 'stop', expectedGeminiReason: 'STOP' },
-        { qwenReason: 'length', expectedGeminiReason: 'MAX_TOKENS' },
-        { qwenReason: 'function_call', expectedGeminiReason: 'STOP' },
-        { qwenReason: 'unknown', expectedGeminiReason: 'OTHER' },
+        { openaiReason: 'stop', expectedGeminiReason: 'STOP' },
+        { openaiReason: 'length', expectedGeminiReason: 'MAX_TOKENS' },
+        { openaiReason: 'function_call', expectedGeminiReason: 'STOP' },
+        { openaiReason: 'unknown', expectedGeminiReason: 'OTHER' },
       ];
 
-      for (const { qwenReason, expectedGeminiReason } of testCases) {
-        const mockQwenResponse = {
+      for (const { openaiReason, expectedGeminiReason } of testCases) {
+        const mockOpenAIResponse = {
           choices: [
             {
               message: { content: 'Test response' },
-              finish_reason: qwenReason,
+              finish_reason: openaiReason,
             },
           ],
           usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 },
@@ -473,11 +542,12 @@ describe('QwenContentGenerator', () => {
 
         mockFetch.mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve(mockQwenResponse),
+          json: () => Promise.resolve(mockOpenAIResponse),
+          text: () => Promise.resolve(JSON.stringify(mockOpenAIResponse)),
         });
 
         const request: GenerateContentParameters = {
-          model: 'qwen-plus',
+          model: 'openai-plus',
           contents: [
             {
               role: 'user',

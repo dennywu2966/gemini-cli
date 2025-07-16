@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { Colors } from '../colors.js';
 import { RadioButtonSelect } from './shared/RadioButtonSelect.js';
 import { LoadedSettings, SettingScope } from '../../config/settings.js';
 import { AuthType } from '@google/gemini-cli-core';
-import { validateAuthMethod } from '../../config/auth.js';
+import { getAuthOptions, validateAuthMethod } from '../../config/auth.js';
 
 interface AuthDialogProps {
   onSelect: (authMethod: AuthType | undefined, scope: SettingScope) => void;
@@ -35,68 +35,42 @@ export function AuthDialog({
   settings,
   initialErrorMessage,
 }: AuthDialogProps): React.JSX.Element {
-  const [errorMessage, setErrorMessage] = useState<string | null>(() => {
-    if (initialErrorMessage) {
-      return initialErrorMessage;
-    }
+  const authOptions = useMemo(() => getAuthOptions(), []);
+  const [errorMessage, setErrorMessage] = useState<string | null>(
+    initialErrorMessage || null,
+  );
 
-    const defaultAuthType = parseDefaultAuthType(
-      process.env.GEMINI_DEFAULT_AUTH_TYPE,
-    );
+  const items = authOptions.map((option) => ({
+    label: option.label,
+    value: option.value,
+    description: option.description,
+    hint: option.hint,
+  }));
 
-    if (process.env.GEMINI_DEFAULT_AUTH_TYPE && defaultAuthType === null) {
-      return (
-        `Invalid value for GEMINI_DEFAULT_AUTH_TYPE: "${process.env.GEMINI_DEFAULT_AUTH_TYPE}". ` +
-        `Valid values are: ${Object.values(AuthType).join(', ')}.`
+  const initialAuthIndex = useMemo(() => {
+    return items.findIndex((item) => {
+      if (settings.merged.selectedAuthType) {
+        return item.value === settings.merged.selectedAuthType;
+      }
+
+      const defaultAuthType = parseDefaultAuthType(
+        process.env.GEMINI_DEFAULT_AUTH_TYPE,
       );
-    }
+      if (defaultAuthType) {
+        return item.value === defaultAuthType;
+      }
 
-    if (
-      process.env.GEMINI_API_KEY &&
-      (!defaultAuthType || defaultAuthType === AuthType.USE_GEMINI)
-    ) {
-      return 'Existing API key detected (GEMINI_API_KEY). Select "Gemini API Key" option to use it.';
-    }
-    return null;
-  });
-  const items = [
-    {
-      label: 'Login with Google',
-      value: AuthType.LOGIN_WITH_GOOGLE,
-    },
-    ...(process.env.CLOUD_SHELL === 'true'
-      ? [
-          {
-            label: 'Use Cloud Shell user credentials',
-            value: AuthType.CLOUD_SHELL,
-          },
-        ]
-      : []),
-    {
-      label: 'Use Gemini API Key',
-      value: AuthType.USE_GEMINI,
-    },
-    { label: 'Vertex AI', value: AuthType.USE_VERTEX_AI },
-  ];
+      if (process.env.OPENAI_API_KEY) {
+        return item.value === AuthType.USE_OPENAI;
+      }
+      
+      if (process.env.GEMINI_API_KEY) {
+        return item.value === AuthType.USE_GEMINI;
+      }
 
-  const initialAuthIndex = items.findIndex((item) => {
-    if (settings.merged.selectedAuthType) {
-      return item.value === settings.merged.selectedAuthType;
-    }
-
-    const defaultAuthType = parseDefaultAuthType(
-      process.env.GEMINI_DEFAULT_AUTH_TYPE,
-    );
-    if (defaultAuthType) {
-      return item.value === defaultAuthType;
-    }
-
-    if (process.env.GEMINI_API_KEY) {
-      return item.value === AuthType.USE_GEMINI;
-    }
-
-    return item.value === AuthType.LOGIN_WITH_GOOGLE;
-  });
+      return item.value === AuthType.LOGIN_WITH_GOOGLE;
+    });
+  }, [items, settings.merged.selectedAuthType]);
 
   const handleAuthSelect = (authMethod: AuthType) => {
     const error = validateAuthMethod(authMethod);
@@ -110,13 +84,10 @@ export function AuthDialog({
 
   useInput((_input, key) => {
     if (key.escape) {
-      // Prevent exit if there is an error message.
-      // This means they user is not authenticated yet.
       if (errorMessage) {
         return;
       }
       if (settings.merged.selectedAuthType === undefined) {
-        // Prevent exiting if no auth method is set
         setErrorMessage(
           'You must select an auth method to proceed. Press Ctrl+C twice to exit.',
         );
