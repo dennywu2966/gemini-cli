@@ -81,6 +81,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
         const openaiRequest = this.convertToOpenAIRequest(request);
         
         let response: Response;
+        openaiRequest.model = "qwen-max-latest";
         try {
           response = await fetch(`${this.apiUrl}/chat/completions`, {
             method: 'POST',
@@ -106,7 +107,9 @@ export class OpenAIContentGenerator implements ContentGenerator {
           } catch {
             responseBody = '';
           }
-          throw OpenAIError.fromHttpStatus(response.status, response.statusText, responseBody);
+
+          console.log(`OpenAI API error: ${this.apiUrl} ${this.apiKey} ${response.status} ${response.statusText} - ${responseBody}`);
+          throw OpenAIError.fromHttpStatus(response.status, response.statusText + " " + this.apiUrl + " " + this.apiKey, responseBody);
         }
 
         let openaiResponse: any;
@@ -148,6 +151,8 @@ export class OpenAIContentGenerator implements ContentGenerator {
       };
 
       let response: Response;
+      openaiRequest.stream = true;
+      openaiRequest.model = "qwen-max-latest";
       try {
         response = await fetch(`${this.apiUrl}/chat/completions`, {
           method: 'POST',
@@ -166,6 +171,8 @@ export class OpenAIContentGenerator implements ContentGenerator {
         throw OpenAIError.fromNetworkError(error);
       }
 
+      console.log(`Hello world wzd.`);
+
       if (!response.ok) {
         let responseBody: string;
         try {
@@ -173,7 +180,8 @@ export class OpenAIContentGenerator implements ContentGenerator {
         } catch {
           responseBody = '';
         }
-        throw OpenAIError.fromHttpStatus(response.status, response.statusText, responseBody);
+        console.log(`OpenAI API error: ${this.apiUrl} ${this.apiKey} ${response.status} ${response.statusText} - ${responseBody}`);
+        throw OpenAIError.fromHttpStatus(response.status, response.statusText + " " + openaiRequest.model + " wzd" + " " + this.apiUrl + " " + this.apiKey + " " + JSON.stringify(openaiRequest), responseBody);
       }
 
       const reader = response.body?.getReader();
@@ -226,21 +234,6 @@ export class OpenAIContentGenerator implements ContentGenerator {
       clearTimeout(timeoutId);
     }
   }
-
-//  private ensureContentArray(input: Content[] | PartUnion[]): Content[] {
-//    if (input.length === 0) return [];
-//  
-//    // 检查第一个元素的类型
-//    if (typeof input[0] === 'string') {
-//      return input.map(part => ({
-//        // 根据你的实际 Content 结构调整
-//        type: 'text',
-//        text: part as string
-//      }));
-//    }
-//  
-//    return input as Content[];
-//  }
 
   private ensureContentArray(input: Content[] | PartUnion[]): Content[] {
     // 1. 处理空数组
@@ -436,37 +429,6 @@ export class OpenAIContentGenerator implements ContentGenerator {
     );
   }
 
-//  private convertToParts(input: Content[] | PartUnion[]): Part[] {
-//    // 1. 处理空输入
-//    if (input.length === 0) return [];
-//  
-//    // 2. 检查输入类型
-//    const isContentArray = input.every(item =>
-//      typeof item === 'object' &&
-//      'role' in item &&
-//      'parts' in item
-//    );
-//  
-//    // 3. 处理 Content[] 类型
-//    if (isContentArray) {
-//      const contents = input as Content[];
-//      // 提取所有 parts 并展平
-//      return contents.flatMap(content => content.parts);
-//    }
-//  
-//    // 4. 处理 PartUnion[] 类型
-//    const parts = input as PartUnion[];
-//    return parts.map(item => {
-//      if (typeof item === 'string') {
-//        // 将字符串转换为 text Part
-//        return { text: item };
-//      } else {
-//        // 直接返回 Part 对象
-//        return item;
-//      }
-//    });
-//  }
-//
   private convertToGeminiResponse(openaiResponse: any): GenerateContentResponse {
     const choice = openaiResponse.choices?.[0];
     if (!choice) {

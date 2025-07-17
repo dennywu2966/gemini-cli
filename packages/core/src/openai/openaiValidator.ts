@@ -298,6 +298,7 @@ export class OpenAIConfigValidator {
       'openai2-7b-instruct',
       'openai2-1.5b-instruct',
       'openai2-0.5b-instruct',
+      'qwen-max-latest',
     ];
 
     if (typeof model !== 'string' || model.length === 0) {

@@ -119,6 +119,10 @@ export const MODEL_CONFIGS: Record<string, Partial<OpenAISpecificConfig>> = {
     repetition_penalty: 1.0,
     max_tokens_per_chunk: 64,
   },
+  'qwen-max-latest': {
+    repetition_penalty: 1.0,
+    max_tokens_per_chunk: 64,
+  },
 };
 
 /**

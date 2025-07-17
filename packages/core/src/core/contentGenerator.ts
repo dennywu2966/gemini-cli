@@ -106,7 +106,7 @@ export async function createContentGeneratorConfig(
   if (authType === AuthType.USE_OPENAI && openaiApiKey) {
     contentGeneratorConfig.apiKey = openaiApiKey;
     contentGeneratorConfig.openaiApiUrl = openaiApiUrl;
-    contentGeneratorConfig.model = model || 'openai-plus'; // Default OpenAI model
+    contentGeneratorConfig.model = model || 'qwen-max-latest'; // Default OpenAI model
 
     return contentGeneratorConfig;
   }
