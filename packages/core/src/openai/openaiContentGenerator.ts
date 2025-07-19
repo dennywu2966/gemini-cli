@@ -339,9 +339,13 @@ export class OpenAIContentGenerator implements ContentGenerator {
     const openaiParams = openaiConfigToApiParams(openaiConfig);
     Object.assign(openaiRequest, openaiParams);
 
+    // 调试：打印 tools 转换前后
+    console.log('[convertToOpenAIRequest] config.tools:', request.config?.tools);
+
     // Handle function calling if tools are present
     if (request.config?.tools && request.config.tools.length > 0) {
       const functions = this.convertToolsToFunctions(request.config.tools);
+      console.log('[convertToOpenAIRequest] Converted functions:', functions);
       if (functions.length > 0) {
         openaiRequest.functions = functions;
         openaiRequest.function_call = 'auto';
@@ -351,7 +355,11 @@ export class OpenAIContentGenerator implements ContentGenerator {
     // Handle OpenAI-specific tools if no Gemini tools
     if (!openaiRequest.functions && openaiConfig.tools && openaiConfig.tools.length > 0) {
       openaiRequest.tools = openaiConfig.tools;
+      console.log('[convertToOpenAIRequest] OpenAI-specific tools:', openaiConfig.tools);
     }
+
+    // 调试：打印最终 openaiRequest
+    console.log('[convertToOpenAIRequest] Final OpenAI request:', JSON.stringify(openaiRequest, null, 2));
 
     return openaiRequest;
   }
@@ -435,36 +443,80 @@ export class OpenAIContentGenerator implements ContentGenerator {
       throw new Error('No choices in OpenAI response');
     }
 
+    console.log('[OpenAIContentGenerator] Raw OpenAI response:', JSON.stringify(openaiResponse, null, 2));
+
     const parts: Part[] = [];
     
+    // 调试：打印 message 内容
+    console.log('[convertToGeminiResponse] choice.message:', choice.message);
+
     if (choice.message?.content) {
       parts.push({ text: choice.message.content });
     }
 
     if (choice.message?.function_call) {
+      console.log('[OpenAIContentGenerator] Detected function_call:', choice.message.function_call);
+      let parsedArgs;
+      try {
+        parsedArgs = JSON.parse(choice.message.function_call.arguments || '{}');
+      } catch (e) {
+        console.warn('[convertToGeminiResponse] Failed to parse function_call arguments:', choice.message.function_call.arguments, e);
+        parsedArgs = {};
+      }
       parts.push({
         functionCall: {
           name: choice.message.function_call.name,
-          args: JSON.parse(choice.message.function_call.arguments || '{}'),
+          args: parsedArgs,
         },
       });
     }
 
+    // 调试 functionCalls 字段
+    let functionCalls = undefined;
+    if (choice.message?.function_call) {
+      let parsedArgs;
+      try {
+        parsedArgs = JSON.parse(choice.message.function_call.arguments || '{}');
+      } catch (e) {
+        console.warn('[convertToGeminiResponse] Failed to parse function_call arguments for functionCalls:', choice.message.function_call.arguments, e);
+        parsedArgs = {};
+      }
+      functionCalls = [{
+        id: choice.message.id || 'openai-func-' + Date.now(),
+        name: choice.message.function_call.name,
+        args: parsedArgs,
+      }];
+      console.log('[OpenAIContentGenerator] Gemini functionCalls:', functionCalls);
+    }
+
+    // 调试 thoughts 相关内容
+    if (choice.message?.content && choice.message.content.startsWith('Thought:')) {
+      parts.push({
+        thought: true,
+        text: choice.message.content,
+      });
+      console.log('[OpenAIContentGenerator] Detected thought:', choice.message.content);
+    }
+
+    // 调试 candidates 结构
+    const candidates = [
+      {
+        content: {
+          role: 'model',
+          parts,
+        },
+        finishReason: this.mapFinishReason(choice.finish_reason),
+      },
+    ];
+    console.log('[convertToGeminiResponse] candidates:', JSON.stringify(candidates, null, 2));
+
     return {
       text: "", // 根据实际响应设置
-      functionCalls: undefined,
+      functionCalls,
       executableCode: undefined,
       codeExecutionResult: undefined,
       data: undefined,
-      candidates: [
-        {
-          content: {
-            role: 'model',
-            parts,
-          },
-          finishReason: this.mapFinishReason(choice.finish_reason),
-        },
-      ],
+      candidates,
       usageMetadata: {
         promptTokenCount: openaiResponse.usage?.prompt_tokens,
         candidatesTokenCount: openaiResponse.usage?.completion_tokens,
@@ -477,6 +529,8 @@ export class OpenAIContentGenerator implements ContentGenerator {
     const delta = chunk.choices?.[0]?.delta;
     if (!delta) return null;
 
+    console.log('[OpenAIContentGenerator] Streaming chunk:', JSON.stringify(chunk, null, 2));
+
     const parts: Part[] = [];
     
     if (delta.content) {
@@ -484,33 +538,72 @@ export class OpenAIContentGenerator implements ContentGenerator {
     }
 
     if (delta.function_call) {
+      console.log('[OpenAIContentGenerator] Streaming function_call:', delta.function_call);
+      let parsedArgs;
+      try {
+        parsedArgs = JSON.parse(delta.function_call.arguments || '{}');
+      } catch (e) {
+        console.warn('[convertStreamChunkToGemini] Failed to parse function_call arguments:', delta.function_call.arguments, e);
+        parsedArgs = {};
+      }
       parts.push({
         functionCall: {
           name: delta.function_call.name,
-          args: JSON.parse(delta.function_call.arguments || '{}'),
+          args: parsedArgs,
         },
       });
     }
 
+    // 调试 functionCalls 字段
+    let functionCalls = undefined;
+    if (delta.function_call) {
+      let parsedArgs;
+      try {
+        parsedArgs = JSON.parse(delta.function_call.arguments || '{}');
+      } catch (e) {
+        console.warn('[convertStreamChunkToGemini] Failed to parse function_call arguments for functionCalls:', delta.function_call.arguments, e);
+        parsedArgs = {};
+      }
+      functionCalls = [{
+        id: delta.id || 'openai-func-' + Date.now(),
+        name: delta.function_call.name,
+        args: parsedArgs,
+      }];
+      console.log('[convertStreamChunkToGemini] Streaming Gemini functionCalls:', functionCalls);
+    }
+
+    // 调试 thoughts 相关内容
+    if (delta.content && delta.content.startsWith('Thought:')) {
+      parts.push({
+        thought: true,
+        text: delta.content,
+      });
+      console.log('[convertStreamChunkToGemini] Streaming thought:', delta.content);
+    }
+
     if (parts.length === 0) return null;
 
+    // 调试 candidates 结构
+    const candidates = [
+      {
+        content: {
+          role: 'model',
+          parts,
+        },
+        finishReason: chunk.choices?.[0]?.finish_reason 
+          ? this.mapFinishReason(chunk.choices[0].finish_reason)
+          : undefined,
+      },
+    ];
+    console.log('[convertStreamChunkToGemini] candidates:', JSON.stringify(candidates, null, 2));
+
     return {
-      text: "", // 根据实际响应设置
-      functionCalls: undefined,
+      text: "",
+      functionCalls,
       executableCode: undefined,
       codeExecutionResult: undefined,
       data: undefined,
-      candidates: [
-        {
-          content: {
-            role: 'model',
-            parts,
-          },
-          finishReason: chunk.choices?.[0]?.finish_reason 
-            ? this.mapFinishReason(chunk.choices[0].finish_reason)
-            : undefined,
-        },
-      ],
+      candidates,
     };
   }
 
