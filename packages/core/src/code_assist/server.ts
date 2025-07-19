@@ -72,6 +72,8 @@ export class CodeAssistServer implements ContentGenerator {
   async generateContentStream(
     req: GenerateContentParameters,
   ): Promise<AsyncGenerator<GenerateContentResponse>> {
+    // 调试：打印发送到 Gemini 的 request
+    console.log('[CodeAssistServer] generateContentStream request:', JSON.stringify(req, null, 2));
     const resps = await this.requestStreamingPost<CaGenerateContentResponse>(
       'streamGenerateContent',
       toGenerateContentRequest(req, this.projectId, this.sessionId),
@@ -79,6 +81,8 @@ export class CodeAssistServer implements ContentGenerator {
     );
     return (async function* (): AsyncGenerator<GenerateContentResponse> {
       for await (const resp of resps) {
+        // 调试：打印 Gemini streaming response
+        console.log('[CodeAssistServer] generateContentStream response chunk:', JSON.stringify(resp, null, 2));
         yield fromGenerateContentResponse(resp);
       }
     })();
@@ -87,11 +91,15 @@ export class CodeAssistServer implements ContentGenerator {
   async generateContent(
     req: GenerateContentParameters,
   ): Promise<GenerateContentResponse> {
+    // 调试：打印发送到 Gemini 的 request
+    console.log('[CodeAssistServer] generateContent request:', JSON.stringify(req, null, 2));
     const resp = await this.requestPost<CaGenerateContentResponse>(
       'generateContent',
       toGenerateContentRequest(req, this.projectId, this.sessionId),
       req.config?.abortSignal,
     );
+    // 调试：打印 Gemini response
+    console.log('[CodeAssistServer] generateContent response:', JSON.stringify(resp, null, 2));
     return fromGenerateContentResponse(resp);
   }
 
